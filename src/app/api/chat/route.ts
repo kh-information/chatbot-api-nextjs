@@ -9,7 +9,7 @@ const openai = new OpenAI({
 // CORS 헤더를 추가하는 함수
 function corsHeaders(origin = '') {
   const allowedOrigins = [
-    'http://127.0.0.1:8080', // 개발용
+    'http://127.0.0.1:8080', // 개발용 테스트 
     'kh-academy.co.kr', // 운영
   ];
 
