@@ -17,9 +17,9 @@ function corsHeaders() {
 }
 
 // OPTIONS 요청 처리 (preflight request)
-// export async function OPTIONS(req: NextRequest) {
-//   return NextResponse.json({}, { headers: corsHeaders() });
-// }
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, { headers: corsHeaders() });
+}
 
 export async function POST(req: NextRequest) {
   try {
