@@ -11,7 +11,7 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-const DAILY_LIMIT = 1;
+const DAILY_LIMIT = parseInt(process.env.DAILY_LIMIT || '2', 10);
 
 function getTodayKey(userId: string) {
   const today = new Date().toISOString().slice(0, 10);
@@ -73,8 +73,16 @@ export async function POST(req: NextRequest) {
       messages,
     });
 
-    return NextResponse.json(response.choices[0].message, {
-      headers: corsHeaders(origin),
+    const updated = (current || 0) + 1;
+    const remaining = DAILY_LIMIT - updated;
+
+    return NextResponse.json({
+      content: response.choices[0].message,
+      meta: {
+        remaining,
+      }
+    }, {
+      headers: corsHeaders(origin)
     });
   } catch (error) {
     console.error("OpenAI API Error:", error);
