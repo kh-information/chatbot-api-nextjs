@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { Redis } from '@upstash/redis';
+import { headers } from 'next/headers';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -11,11 +12,45 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-const DAILY_LIMIT = parseInt(process.env.DAILY_LIMIT || '2', 10);
+const DAILY_LIMIT = parseInt(process.env.DAILY_LIMIT || '10', 10);
+const WINDOW_MS = 24 * 60 * 60 * 1000; // 24시간을 밀리초로
 
-function getTodayKey(userId: string) {
-  const today = new Date().toISOString().slice(0, 10);
-  return `limit:${userId}:${today}`;
+// IP 주소 가져오기 함수
+async function getClientIP() {
+  const headersList = await headers();
+  const forwarded = headersList.get('x-forwarded-for');
+  return forwarded ? forwarded.split(',')[0] : 'unknown';
+}
+
+// Rate limit 키 생성 함수
+function getRateLimitKey(ip: string) {
+  return `ratelimit:${ip}`;
+}
+
+// Rate limit 값 확인 함수 (GET용)
+async function getRateLimitCount(ip: string) {
+  const key = getRateLimitKey(ip);
+  const count = await redis.get<number>(key) || 0;
+  console.log(count)
+  // await redis.del(key)
+  return {
+    remaining: Math.max(0, DAILY_LIMIT - count)
+  };
+}
+
+// Rate limiting 함수 (POST용)
+async function rateLimit(ip: string) {
+  const key = getRateLimitKey(ip);
+  const requestCount = await redis.incr(key);
+  
+  if (requestCount === 1) {
+    await redis.pexpire(key, WINDOW_MS);
+  }
+  
+  return {
+    allowed: requestCount <= DAILY_LIMIT,
+    remaining: Math.max(0, DAILY_LIMIT - requestCount)
+  };
 }
 
 function corsHeaders(origin = '') {
@@ -39,56 +74,61 @@ export async function OPTIONS(req: NextRequest) {
   return NextResponse.json({}, { headers: corsHeaders(origin) });
 }
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   const origin = req.headers.get('origin') || '';
-  const body = await req.json();
-  const { messages, userId } = body;
+  
+  try {
+    const ip = await getClientIP();
+    const { remaining } = await getRateLimitCount(ip); // GET용 함수 사용
 
-  if (!userId) {
-    return NextResponse.json({ error: "userId가 필요합니다." }, { status: 400 });
-  }
-
-  const key = getTodayKey(userId);
-  const current = await redis.get<number>(key);
-
-  if ((current || 0) >= DAILY_LIMIT) {
+    return NextResponse.json({ remaining }, {
+      headers: corsHeaders(origin)
+    });
+  } catch (error) {
+    console.error('Rate limit check error:', error);
     return NextResponse.json(
-      { error: "하루 질문 횟수를 초과했습니다." },
-      {
-        status: 429,
-        headers: corsHeaders(origin),
+      { error: "Internal server error" },
+      { 
+        status: 500,
+        headers: corsHeaders(origin)
       }
     );
   }
+}
 
-  // 요청 수 증가 및 TTL 설정
-  await redis.incr(key);
-  if (current === null) {
-    await redis.expire(key, 60 * 60 * 24); // 24시간 유지
-  }
-
+export async function POST(req: NextRequest) {
+  const origin = req.headers.get('origin') || '';
+  
   try {
+    const { messages } = await req.json();
+    const ip = await getClientIP();
+    const { allowed, remaining } = await rateLimit(ip);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "일일 사용 한도를 초과했습니다." },
+        {
+          status: 429,
+          headers: corsHeaders(origin),
+        }
+      );
+    }
+
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4",
       messages,
     });
 
-    const updated = (current || 0) + 1;
-    const remaining = DAILY_LIMIT - updated;
-
     return NextResponse.json({
       content: response.choices[0].message,
-      meta: {
-        remaining,
-      }
+      meta: { remaining }
     }, {
       headers: corsHeaders(origin)
     });
   } catch (error) {
-    console.error("OpenAI API Error:", error);
-
+    console.error("API Error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch response" },
+      { error: "요청 처리 중 오류가 발생했습니다." },
       {
         status: 500,
         headers: corsHeaders(origin),
