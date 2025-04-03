@@ -43,4 +43,5 @@ next-env.d.ts
 
 # 환경 변수 파일 Git에서 제외
 .env.local
+.env.*.local
 .env
