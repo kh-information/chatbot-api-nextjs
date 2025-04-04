@@ -56,7 +56,8 @@ async function rateLimit(ip: string) {
 function corsHeaders(origin = '') {
   const allowedOrigins = [
     'http://127.0.0.1:8080',
-    'http://khtest.co.kr:8282/',
+    'http://localhost:8080',
+    'http://khtest.co.kr',
     'https://kh-academy.co.kr',
   ];
 
