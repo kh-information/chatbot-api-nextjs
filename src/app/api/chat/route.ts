@@ -133,8 +133,8 @@ export async function POST(req: NextRequest) {
     }, {
       headers: corsHeaders(origin)
     });
-  } catch (error: any) {
-    if (error.message?.includes('timeout')) {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message?.includes('timeout')) {
       return NextResponse.json(
         { error: "응답 시간이 초과되었습니다. 다시 시도해주세요." },
         {
