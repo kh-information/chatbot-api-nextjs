@@ -98,6 +98,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export const runtime = 'edge'; // Edge Runtime 사용
+
 export async function POST(req: NextRequest) {
   const origin = req.headers.get('origin') || '';
   
@@ -117,8 +119,12 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages,
+      max_tokens: 1000,
+      temperature: 0.7,
+    }, {
+      timeout: 8000
     });
 
     return NextResponse.json({
@@ -127,7 +133,16 @@ export async function POST(req: NextRequest) {
     }, {
       headers: corsHeaders(origin)
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes('timeout')) {
+      return NextResponse.json(
+        { error: "응답 시간이 초과되었습니다. 다시 시도해주세요." },
+        {
+          status: 408,
+          headers: corsHeaders(origin),
+        }
+      );
+    }
     console.error("API Error:", error);
     return NextResponse.json(
       { error: "요청 처리 중 오류가 발생했습니다." },
