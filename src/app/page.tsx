@@ -1,35 +1,6 @@
 import Image from "next/image";
 
 export default function Home() {
-  const fetchChatResponse = async (messages: any[]) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({ messages }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        if (response.status === 408) {
-          throw new Error('응답 시간이 초과되었습니다. 다시 시도해주세요.');
-        }
-        throw new Error('오류가 발생했습니다.');
-      }
-
-      return await response.json();
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error('요청이 시간 초과되었습니다. 다시 시도해주세요.');
-      }
-      throw error;
-    }
-  };
-
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
