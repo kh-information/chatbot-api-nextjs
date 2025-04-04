@@ -32,7 +32,7 @@ async function getRateLimitCount(ip: string) {
   const key = getRateLimitKey(ip);
   const count = await redis.get<number>(key) || 0;
   console.log(count)
-  // await redis.del(key)
+  await redis.del(key)
   return {
     remaining: Math.max(0, DAILY_LIMIT - count)
   };
